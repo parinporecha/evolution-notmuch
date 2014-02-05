@@ -3,25 +3,12 @@
 
 #include <notmuch.h>
 
-
-
-void scan_dir_cb (GObject *dir, GAsyncResult *res, gpointer data)
-{
-  GError *error;
-  notmuch_database_t *db = (notmuch_database_t*)data;
-  GFileEnumerator *erator = g_file_enumerate_children_finish (G_FILE(dir), res, &error);
-  GFileInfo *info = g_file_enumerator_next_file (erator, NULL, &error);
-
-  while (info != NULL)
-  {
-    g_message (g_file_info_get_name (info));
-    info = g_file_enumerator_next_file (erator, NULL, &error);
-  }
-}
-
 void scan_directory (notmuch_database_t *db, GFile *dir)
 {
-  GFile *db_folders;
+  GError          *error;
+  GFile           *db_folders;
+  GFileEnumerator *erator;
+  GFileInfo       *info;
 
   db_folders = g_file_get_child (dir, "folders");
   if (!g_file_query_exists (db_folders, NULL))
@@ -33,14 +20,26 @@ void scan_directory (notmuch_database_t *db, GFile *dir)
     return;
   }
 
-  g_file_enumerate_children_async (db_folders,
-                                   G_FILE_ATTRIBUTE_STANDARD_TYPE,
-                                   G_FILE_QUERY_INFO_NONE,
-                                   G_PRIORITY_DEFAULT,
-                                   NULL,
-                                   scan_dir_cb,
-                                   (gpointer)db);
+  erator = g_file_enumerate_children (db_folders,
+                                      G_FILE_ATTRIBUTE_STANDARD_TYPE,
+                                      G_FILE_QUERY_INFO_NONE,
+                                      NULL,
+                                      &error);
 
+  info = g_file_enumerator_next_file (erator, NULL, &error);
+  while (info)
+  {
+    const gchar *name = g_file_info_get_name (info);
+    GFileAttributeType type = g_file_info_get_file_type (info);
+
+    /* TODO: check for cur/tmp/new and subfolders/ */
+    g_message ("%s %d", name, type);
+
+    g_object_unref (info);
+    info = g_file_enumerator_next_file (erator, NULL, &error);
+  }
+
+  g_object_unref (erator);
   g_object_unref (db_folders);
 }
 
