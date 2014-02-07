@@ -3,44 +3,100 @@
 
 #include <notmuch.h>
 
-void scan_directory (notmuch_database_t *db, GFile *dir)
+typedef void (*crawler_callback_t) (notmuch_database_t*, GFile*);
+static  void index_subfolders_cb   (notmuch_database_t*, GFile*);
+
+static void
+folder_crawler (notmuch_database_t *db,
+                GFile              *basedir,
+                crawler_callback_t  cb)
 {
-  GError          *error;
-  GFile           *db_folders;
+  GError          *error = NULL;
   GFileEnumerator *erator;
   GFileInfo       *info;
 
-  db_folders = g_file_get_child (dir, "folders");
-  if (!g_file_query_exists (db_folders, NULL))
-  {
-    gchar *path = g_file_get_path (db_folders);
-    g_error ("%s does not exists", path);
-    g_free (path);
-    g_object_unref (db_folders);
-    return;
-  }
-
-  erator = g_file_enumerate_children (db_folders,
+  erator = g_file_enumerate_children (basedir,
                                       G_FILE_ATTRIBUTE_STANDARD_TYPE,
                                       G_FILE_QUERY_INFO_NONE,
                                       NULL,
                                       &error);
+  if (error)
+  {
+    g_error (error->message);
+    g_error_free (error);
+    return;
+  }
 
   info = g_file_enumerator_next_file (erator, NULL, &error);
   while (info)
   {
     const gchar *name = g_file_info_get_name (info);
-    GFileAttributeType type = g_file_info_get_file_type (info);
+    GFileType type = g_file_info_get_file_type (info);
+    GFile     *item = g_file_get_child (basedir, name);
 
-    /* TODO: check for cur/tmp/new and subfolders/ */
-    g_message ("%s %d", name, type);
+    cb (db, item);
 
+    g_object_unref (item);
     g_object_unref (info);
     info = g_file_enumerator_next_file (erator, NULL, &error);
   }
-
   g_object_unref (erator);
-  g_object_unref (db_folders);
+}
+
+static void
+index_email_nn_cb (notmuch_database_t *db, GFile *mailfile)
+{
+  g_message (g_file_get_path (mailfile));
+}
+
+static void
+index_emails_cb (notmuch_database_t *db, GFile *folder)
+{
+  folder_crawler (db, folder, index_email_nn_cb);
+}
+
+static void
+index_subfolders_cb (notmuch_database_t *db, GFile *dir)
+{
+  int i = 0;
+  char *stdfolders[] = {"cur", "tmp", "new", "subfolders", NULL};
+
+  while (stdfolders[i])
+  {
+    GFile *folder = g_file_get_child (dir, *stdfolders);
+    if (g_file_query_exists (folder, NULL))
+    {
+      g_message (stdfolders[i]);
+
+      if (g_str_equal (stdfolders[i], "subfolders"))
+      {
+        folder_crawler (db, folder, index_subfolders_cb);
+      }
+      else
+        folder_crawler (db, folder, index_emails_cb);
+    }
+    g_object_unref (folder);
+    i++;
+  }
+}
+
+static void
+scan_directory (notmuch_database_t *db, GFile *db_folder)
+{
+  GFile           *folders;
+  folders = g_file_get_child (db_folder, "folders");
+  if (!g_file_query_exists (folders, NULL))
+  {
+    gchar *path = g_file_get_path (folders);
+    g_error ("%s does not exists", path);
+    g_free (path);
+  }
+  else
+  {
+    folder_crawler (db, folders, index_subfolders_cb);
+  }
+
+  g_object_unref (folders);
 }
 
 
