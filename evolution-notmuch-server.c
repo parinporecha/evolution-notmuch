@@ -34,6 +34,7 @@ folder_crawler (notmuch_database_t *db,
     GFileType type = g_file_info_get_file_type (info);
     GFile     *item = g_file_get_child (basedir, name);
 
+    g_message (name);
     cb (db, item);
 
     g_object_unref (item);
@@ -44,15 +45,9 @@ folder_crawler (notmuch_database_t *db,
 }
 
 static void
-index_email_nn_cb (notmuch_database_t *db, GFile *mailfile)
+index_email_cb (notmuch_database_t *db, GFile *mailfile)
 {
   g_message (g_file_get_path (mailfile));
-}
-
-static void
-index_emails_cb (notmuch_database_t *db, GFile *folder)
-{
-  folder_crawler (db, folder, index_email_nn_cb);
 }
 
 static void
@@ -63,17 +58,17 @@ index_subfolders_cb (notmuch_database_t *db, GFile *dir)
 
   while (stdfolders[i])
   {
-    GFile *folder = g_file_get_child (dir, *stdfolders);
+    GFile *folder = g_file_get_child (dir, stdfolders[i]);
     if (g_file_query_exists (folder, NULL))
     {
-      g_message (stdfolders[i]);
-
       if (g_str_equal (stdfolders[i], "subfolders"))
       {
         folder_crawler (db, folder, index_subfolders_cb);
       }
       else
-        folder_crawler (db, folder, index_emails_cb);
+      {
+        folder_crawler (db, folder, index_email_cb);
+      }
     }
     g_object_unref (folder);
     i++;
