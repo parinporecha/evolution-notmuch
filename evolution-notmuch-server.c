@@ -56,7 +56,7 @@ index_email_cb (notmuch_database_t *db, GFile *mailfile)
 
   if (status != NOTMUCH_STATUS_SUCCESS &&
       status != NOTMUCH_STATUS_DUPLICATE_MESSAGE_ID)
-    g_warning ("Couldm not index %s: %d", path, status);
+    g_warning ("Could not index %s: %d", path, status);
 
   g_free (path);
 }
