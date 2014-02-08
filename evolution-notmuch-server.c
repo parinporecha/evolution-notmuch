@@ -47,7 +47,24 @@ folder_crawler (notmuch_database_t *db,
 static void
 index_email_cb (notmuch_database_t *db, GFile *mailfile)
 {
-  g_message (g_file_get_path (mailfile));
+  notmuch_status_t status;
+  gchar *path = g_file_get_path (mailfile);
+
+  g_message ("Indexing %s", g_file_get_path (mailfile));
+
+  status = notmuch_database_add_message (db, path, NULL);
+
+  if (status != NOTMUCH_STATUS_SUCCESS &&
+      status != NOTMUCH_STATUS_DUPLICATE_MESSAGE_ID)
+    g_warning ("Couldm not index %s: %d", path, status);
+
+  g_free (path);
+}
+
+static void
+index_container_folder_cb (notmuch_database_t *db, GFile *folder)
+{
+  folder_crawler (db, folder, index_email_cb);
 }
 
 static void
@@ -67,7 +84,7 @@ index_subfolders_cb (notmuch_database_t *db, GFile *dir)
       }
       else
       {
-        folder_crawler (db, folder, index_email_cb);
+        folder_crawler (db, folder, index_container_folder_cb);
       }
     }
     g_object_unref (folder);
@@ -96,10 +113,10 @@ scan_directory (notmuch_database_t *db, GFile *db_folder)
 
 
 int main (int argc, char** argv) {
-  GFile *db_dir, *db_file;
+  GFile              *db_dir, *db_file;
   notmuch_status_t    status;
-  notmuch_database_t *db;
-  GMainLoop *loop;
+  notmuch_database_t *db   = NULL;
+  GMainLoop          *loop = NULL;
 
   if (argc != 2)
   {
@@ -119,21 +136,26 @@ int main (int argc, char** argv) {
   }
 
   if (!g_file_query_exists (db_file, NULL))
-  {
     status = notmuch_database_create (argv[1], &db);
-    if (status)
-    {
-      g_error ("Could not create database: %d", status);
-      g_object_unref (db_dir);
-      g_object_unref (db_file);
-      notmuch_database_destroy (db);
-      return 3;
-    }
+  else
+    status = notmuch_database_open (argv[1], NOTMUCH_DATABASE_MODE_READ_WRITE, &db);
+
+  if (status)
+  {
+    g_error ("Could not open database: %d", status);
+    g_object_unref (db_dir);
+    g_object_unref (db_file);
+    notmuch_database_destroy (db);
+    return 3;
   }
 
-  scan_directory (db, db_dir);
 
-  loop = g_main_loop_new (NULL, FALSE);
-  g_main_loop_run (loop);
+  scan_directory (db, db_dir);
+  //loop = g_main_loop_new (NULL, FALSE);
+  //g_main_loop_run (loop);
+
+  notmuch_database_destroy (db);
+  g_object_unref (db_file);
+  g_object_unref (db_dir);
   return 0;
 }
