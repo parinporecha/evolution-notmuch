@@ -50,7 +50,7 @@ index_email_cb (notmuch_database_t *db, GFile *mailfile)
   notmuch_status_t status;
   gchar *path = g_file_get_path (mailfile);
 
-  g_message ("Indexing %s", g_file_get_path (mailfile));
+  //g_message ("Indexing %s", g_file_get_path (mailfile));
 
   status = notmuch_database_add_message (db, path, NULL);
 
@@ -116,7 +116,12 @@ int main (int argc, char** argv) {
   GFile              *db_dir, *db_file;
   notmuch_status_t    status;
   notmuch_database_t *db   = NULL;
+  notmuch_query_t *query = NULL;
+  notmuch_messages_t *messages = NULL;
+  notmuch_message_t *message = NULL;
   GMainLoop          *loop = NULL;
+
+  const char *query_string = "date:2014-02-01..";
 
   if (argc != 2)
   {
@@ -153,6 +158,36 @@ int main (int argc, char** argv) {
   scan_directory (db, db_dir);
   //loop = g_main_loop_new (NULL, FALSE);
   //g_main_loop_run (loop);
+
+  query = notmuch_query_create (db, query_string);
+
+  if (!query) {
+    g_error ("Could not create query from string = \"%s\"", query_string);
+    notmuch_database_destroy (db);
+    g_object_unref (db_file);
+    g_object_unref (db_dir);
+    return 4;
+  }
+
+  g_message ("Query results -\n\n");
+
+  for (messages = notmuch_query_search_messages (query);
+         notmuch_messages_valid (messages);
+         notmuch_messages_move_to_next (messages)) {
+
+    message = notmuch_messages_get (messages);
+
+    g_message ("Message file: %s", notmuch_message_get_filename (message));
+    g_message ("Message ID: %s", notmuch_message_get_message_id (message));
+    g_message ("Message Sender: %s", notmuch_message_get_header (message, "from"));
+    g_message ("Message Recipients: %s", notmuch_message_get_header (message, "to"));
+    g_message ("Message Subject: %s", notmuch_message_get_header (message, "subject"));
+    g_message ("Message date: %s\n", notmuch_message_get_header (message, "date"));
+
+    notmuch_message_destroy (message);
+  }
+
+  notmuch_query_destroy (query);
 
   notmuch_database_destroy (db);
   g_object_unref (db_file);
